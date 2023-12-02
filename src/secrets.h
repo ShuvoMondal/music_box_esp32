@@ -1,0 +1,2 @@
+#define WIFI_SSID "FE5G"
+#define WIFI_PASSWORD "sm12345678"
