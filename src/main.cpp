@@ -1,18 +1,19 @@
 #include <Arduino.h>
 #include <WiFiMulti.h>
-
-#define WIFI_SSID "FE5G"
-#define WIFI_PASSWORD "sm12345678"
+#include "secrets.h"
 
 WiFiMulti wifiMulti;
 
 void setup() {
   Serial.begin(921600);
+  Serial.println("Starting.....");
+
   pinMode(LED_BUILTIN, OUTPUT);
   wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
   while (wifiMulti.run() != WL_CONNECTED) {
     delay (100);
   }
+  
   Serial.println("Connected");
 }
 
