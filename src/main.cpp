@@ -79,9 +79,9 @@ void reconnect()
 
 void setup() {
   Serial.begin(921600);
+  pinMode(LED_BUILTIN, OUTPUT);
   Serial.print("\nStarting ESP board.....");
 
-  pinMode(LED_BUILTIN, OUTPUT);
   setupWifi();
   espClient.setCACert(ca_cert);
   client.setServer(MQTT_SERVER, MQTT_PORT);
@@ -93,5 +93,11 @@ void loop(){
   {
       reconnect();
   }
+//   Serial.println("Enter song or url:");
+//   String song = Serial.readStringUntil('\n');
+//   if(!song.isEmpty()){
+//     client.publish(topic, song.c_str());
+//     song.clear();
+//   }
   client.loop();
 }
