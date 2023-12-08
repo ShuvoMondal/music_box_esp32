@@ -1,9 +1,16 @@
 #include <Arduino.h>
+#include <SPI.h>
 #include <WiFiMulti.h>
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
+#include "MFRC522.h"
 #include "secrets.h"
 
+#define SS_PIN 5
+#define REST_PIN 4
+
+
+byte const BUFFERSiZE = 176;
 const char *ca_cert =
     "-----BEGIN CERTIFICATE-----\n"
     "MIIDrzCCApegAwIBAgIQCDvgVpBCRrGhdWrJWZHHSjANBgkqhkiG9w0BAQUFADBh\n"
@@ -31,6 +38,7 @@ const char *ca_cert =
 WiFiMulti wifiMulti;
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
+MFRC522 mfrc522(SS_PIN, REST_PIN);
 
 const char *topic = MQTT_TOPIC;
 
@@ -77,8 +85,82 @@ void reconnect()
     }
 }
 
+String parseNFCTagData(byte *dataBuffer)
+{
+    // first 28 bytes is header info
+    // data ends with 0xFE
+    String retVal = "https://www.youtube.com/";
+    for (int i = 28 + 17; i < BUFFERSiZE; i++)
+    {
+        if (dataBuffer[i] == 0xFE || dataBuffer[i] == 0x00)
+        {
+            break;
+        }
+        else
+        {
+            retVal += (char)dataBuffer[i];
+        }
+    }
+    return retVal;
+}
+
+void readNFCTagData(byte *dataBuffer)
+{
+    MFRC522::StatusCode status;
+    byte byteCount;
+    byte buffer[18];
+    byte x = 0;
+
+    int totalBytesRead = 0;
+
+    // reset the dataBuffer
+    for (byte i = 0; i < BUFFERSiZE; i++)
+    {
+        dataBuffer[i] = 0;
+    }
+
+    for (byte page = 0; page < BUFFERSiZE / 4; page += 4)
+    {
+        // Read pages
+        byteCount = sizeof(buffer);
+        status = mfrc522.MIFARE_Read(page, buffer, &byteCount);
+        if (status == mfrc522.STATUS_OK)
+        {
+            totalBytesRead += byteCount - 2;
+
+            for (byte i = 0; i < byteCount - 2; i++)
+            {
+                dataBuffer[x++] = buffer[i]; // add data output buffer
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+}
+
+String readNFCTag(){
+    if (mfrc522.PICC_ReadCardSerial())
+    {
+        byte dataBuffer[BUFFERSiZE];
+        readNFCTagData(dataBuffer);
+        mfrc522.PICC_HaltA();
+
+        // hexDump(dataBuffer);
+        Serial.print("Read NFC tag: ");
+        String context_uri = parseNFCTagData(dataBuffer);
+        Serial.println(context_uri);
+        return context_uri;
+    }
+}
+
+
+
 void setup() {
   Serial.begin(921600);
+  SPI.begin();     // init SPI bus
+  mfrc522.PCD_Init(); // init MFRC522
   pinMode(LED_BUILTIN, OUTPUT);
   Serial.print("\nStarting ESP board.....");
 
@@ -89,9 +171,14 @@ void setup() {
 
 void loop(){
   digitalWrite(LED_BUILTIN, WiFi.status() == WL_CONNECTED);
-  if (!client.connected())
-  {
+  if (!client.connected()){
       reconnect();
+  }
+
+  if (mfrc522.PICC_IsNewCardPresent()){
+      Serial.println("NFC tag present");
+      String url = readNFCTag();
+      client.publish(topic, url.c_str());
   }
 //   Serial.println("Enter song or url:");
 //   String song = Serial.readStringUntil('\n');
